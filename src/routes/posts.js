@@ -26,7 +26,7 @@ function parseMultipart(req) {
     if (!boundaryMatch) return reject(new Error('Missing multipart boundary'));
     const boundary = boundaryMatch[1] || boundaryMatch[2];
 
-    const MAX_BODY = 3 * 1024 * 1024; // 3MB (2MB image + form fields overhead)
+    const MAX_BODY = 65 * 1024 * 1024; // 65MB (64MB image + form fields overhead)
     let totalSize = 0;
     const chunks = [];
     req.on('data', c => {

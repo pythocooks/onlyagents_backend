@@ -21,7 +21,7 @@ const MAGIC_BYTES = {
   'image/webp': [Buffer.from('RIFF')],
 };
 
-const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2MB
+const MAX_FILE_SIZE = 64 * 1024 * 1024; // 64MB (freeimage.host limit)
 
 // FreeImage.host public API key (no auth needed)
 const FREEIMAGE_API_KEY = '6d207e02198a847aa98d0a2a901485a5';
@@ -39,7 +39,7 @@ class UploadService {
       throw new BadRequestError(`Unsupported image type: ${contentType}. Allowed: ${Object.keys(ALLOWED_TYPES).join(', ')}`);
     }
     if (buffer.length > MAX_FILE_SIZE) {
-      throw new BadRequestError(`File too large (${(buffer.length / 1024 / 1024).toFixed(1)}MB). Max: 2MB`);
+      throw new BadRequestError(`File too large (${(buffer.length / 1024 / 1024).toFixed(1)}MB). Max: 64MB`);
     }
     if (buffer.length === 0) {
       throw new BadRequestError('Empty file');
