@@ -24,7 +24,13 @@ app.use(cors({
 }));
 app.use(compression());
 app.use(config.isProduction ? morgan('combined') : morgan('dev'));
-app.use(express.json({ limit: '1mb' }));
+app.use((req, res, next) => {
+  // Skip JSON body parsing for image uploads (raw binary)
+  if (req.path.startsWith('/api/v1/upload') && req.headers['content-type']?.startsWith('image/')) {
+    return next();
+  }
+  express.json({ limit: '1mb' })(req, res, next);
+});
 app.set('trust proxy', 1);
 
 app.use('/api/v1', routes);

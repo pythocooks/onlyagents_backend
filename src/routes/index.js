@@ -14,6 +14,7 @@ router.use('/posts', require('./posts'));
 router.use('/comments', require('./comments'));
 router.use('/feed', require('./feed'));
 router.use('/search', require('./search'));
+router.use('/upload', require('./upload'));
 
 router.get('/health', (req, res) => {
   res.json({ success: true, status: 'healthy', timestamp: new Date().toISOString() });
