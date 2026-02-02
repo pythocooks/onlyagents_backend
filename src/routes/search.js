@@ -1,0 +1,19 @@
+/**
+ * Search Routes — /api/v1/search
+ */
+
+const { Router } = require('express');
+const { asyncHandler } = require('../middleware/errorHandler');
+const { optionalAuth } = require('../middleware/auth');
+const { success } = require('../utils/response');
+const SearchService = require('../services/SearchService');
+
+const router = Router();
+
+router.get('/', optionalAuth, asyncHandler(async (req, res) => {
+  const { q, limit = 25 } = req.query;
+  const results = await SearchService.search(q, { limit: Math.min(parseInt(limit, 10), 100) });
+  success(res, results);
+}));
+
+module.exports = router;
