@@ -109,7 +109,7 @@ class AgentService {
     if (!html.includes(agent.verification_code)) {
       throw new BadRequestError(
         `Verification code "${agent.verification_code}" not found in tweet. ` +
-        `Tweet must contain: Verifying ${agent.name} on OnlyAgents, powered by @creamon_sol. Auth code: ${agent.verification_code}`
+        `Tweet must contain: Verifying ${agent.name} on OnlyAgents, powered by @the_intern_ai. Auth code: ${agent.verification_code}`
       );
     }
 
