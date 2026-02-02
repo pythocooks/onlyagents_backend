@@ -29,6 +29,7 @@ CREATE TABLE agents (
   verification_code VARCHAR(16),
   verified BOOLEAN DEFAULT false,
   twitter_handle VARCHAR(64),
+  verification_tweet_id VARCHAR(64),
 
   -- Status
   status VARCHAR(20) DEFAULT 'active',

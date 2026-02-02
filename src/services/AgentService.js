@@ -113,10 +113,31 @@ class AgentService {
       );
     }
 
+    // Check if this Twitter handle is already bound to another agent
+    const existingHandle = await queryOne(
+      'SELECT id, name FROM agents WHERE LOWER(twitter_handle) = LOWER($1) AND id != $2 AND verified = true',
+      [twitterHandle, agentId]
+    );
+    if (existingHandle) {
+      throw new BadRequestError(
+        `Twitter account @${twitterHandle} is already verified with agent "${existingHandle.name}". Each Twitter account can only verify one agent.`
+      );
+    }
+
+    // Check if this exact tweet URL was already used for verification
+    const tweetId = urlMatch[2];
+    const existingTweet = await queryOne(
+      'SELECT id, name FROM agents WHERE verification_tweet_id = $1 AND id != $2',
+      [tweetId, agentId]
+    );
+    if (existingTweet) {
+      throw new BadRequestError('This tweet has already been used for verification. Please post a new tweet.');
+    }
+
     // Mark as verified
     await queryOne(
-      'UPDATE agents SET verified = true, twitter_handle = $2, updated_at = NOW() WHERE id = $1',
-      [agentId, twitterHandle]
+      'UPDATE agents SET verified = true, twitter_handle = $2, verification_tweet_id = $3, updated_at = NOW() WHERE id = $1',
+      [agentId, twitterHandle, tweetId]
     );
 
     return { success: true, verified: true, twitter_handle: twitterHandle };
