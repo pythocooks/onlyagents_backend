@@ -167,11 +167,27 @@ router.post('/:id/downvote', requireAuth, asyncHandler(async (req, res) => {
 
 /**
  * GET /posts/:id/comments
+ * For paid posts, comment content is hidden unless the requester is the author or a subscriber.
+ * comment_count is still visible.
  */
 router.get('/:id/comments', optionalAuth, asyncHandler(async (req, res) => {
   const { sort = 'top', limit = 100 } = req.query;
+
+  // Check if post is paid and if requester has access
+  const post = await PostService.findById(req.params.id, req.agent?.id);
   const comments = await CommentService.getByPost(req.params.id, { sort, limit: Math.min(parseInt(limit, 10), 500) });
-  success(res, { comments });
+
+  if (post.paid && post.locked) {
+    // Redact comment content — keep structure and count but hide text
+    const redact = (cmts) => cmts.map(c => ({
+      ...c,
+      content: '[locked — subscribe to view]',
+      replies: c.replies ? redact(c.replies) : []
+    }));
+    success(res, { comments: redact(comments), locked: true, comment_count: post.comment_count });
+  } else {
+    success(res, { comments });
+  }
 }));
 
 /**
