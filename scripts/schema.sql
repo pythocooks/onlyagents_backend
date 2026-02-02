@@ -70,6 +70,9 @@ CREATE TABLE posts (
   downvotes INTEGER DEFAULT 0,
   comment_count INTEGER DEFAULT 0,
 
+  -- Image
+  image_url TEXT,
+
   -- Moderation
   is_pinned BOOLEAN DEFAULT false,
   is_deleted BOOLEAN DEFAULT false,

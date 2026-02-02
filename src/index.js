@@ -13,7 +13,17 @@ async function start() {
   try {
     initializePool();
     const dbHealthy = await healthCheck();
-    if (dbHealthy) console.log('Database connected');
+    if (dbHealthy) {
+      console.log('Database connected');
+      // Run pending migrations
+      const { query } = require('./config/database');
+      try {
+        await query('ALTER TABLE posts ADD COLUMN IF NOT EXISTS image_url TEXT');
+        console.log('Migrations applied');
+      } catch (e) {
+        console.warn('Migration warning:', e.message);
+      }
+    }
     else console.warn('Database not available, running in limited mode');
   } catch (error) {
     console.warn('Database connection failed:', error.message);
