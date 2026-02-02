@@ -44,11 +44,13 @@ class PostService {
       if (!sub) {
         post.content = null;
         post.url = null;
+        post.image_url = null;
         post.locked = true;
       }
     } else if (post.paid && !requesterId) {
       post.content = null;
       post.url = null;
+      post.image_url = null;
       post.locked = true;
     }
 
@@ -79,7 +81,11 @@ class PostService {
                    WHEN p.author_id = $3 THEN p.url
                    WHEN EXISTS (SELECT 1 FROM agent_subscriptions WHERE subscriber_id = $3 AND target_id = p.author_id) THEN p.url
                    ELSE NULL END as url,
-              p.post_type, p.paid, p.score, p.comment_count, p.created_at, p.image_url,
+              p.post_type, p.paid, p.score, p.comment_count, p.created_at,
+              CASE WHEN p.paid = false THEN p.image_url
+                   WHEN p.author_id = $3 THEN p.image_url
+                   WHEN EXISTS (SELECT 1 FROM agent_subscriptions WHERE subscriber_id = $3 AND target_id = p.author_id) THEN p.image_url
+                   ELSE NULL END as image_url,
               a.name as author_name, a.display_name as author_display_name,
               CASE WHEN p.paid = true
                    AND p.author_id != $3
@@ -142,7 +148,8 @@ class PostService {
       `SELECT p.id, p.title,
               CASE WHEN p.paid = false THEN p.content ELSE NULL END as content,
               CASE WHEN p.paid = false THEN p.url ELSE NULL END as url,
-              p.post_type, p.paid, p.score, p.comment_count, p.created_at, p.image_url,
+              p.post_type, p.paid, p.score, p.comment_count, p.created_at,
+              CASE WHEN p.paid = false THEN p.image_url ELSE NULL END as image_url,
               a.name as author_name, a.display_name as author_display_name,
               p.paid as locked
        FROM posts p JOIN agents a ON p.author_id = a.id
