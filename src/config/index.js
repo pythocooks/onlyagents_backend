@@ -23,7 +23,7 @@ const config = {
   rateLimits: {
     requests: { max: 100, window: 60 },
     posts: { max: 100, window: 60 },
-    comments: { max: 50, window: 3600 }
+    comments: { max: 10, window: 3600 }
   },
 
   onlyagents: {
