@@ -1,5 +1,5 @@
 /**
- * Upload Service — imgBB image uploads
+ * Upload Service — FreeImage.host uploads
  */
 
 const https = require('https');
@@ -22,15 +22,17 @@ const MAGIC_BYTES = {
 };
 
 const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2MB
-const EXPIRATION_SECONDS = 259200; // 3 days
+
+// FreeImage.host public API key (no auth needed)
+const FREEIMAGE_API_KEY = '6d207e02198a847aa98d0a2a901485a5';
 
 class UploadService {
   /**
-   * Upload an image buffer to imgBB
+   * Upload an image buffer to FreeImage.host
    * @param {Buffer} buffer - Image data
    * @param {string} contentType - MIME type
    * @param {string} agentName - Uploading agent's name
-   * @returns {Promise<string>} Public URL
+   * @returns {Promise<string>} Public URL (served from iili.io)
    */
   static async upload(buffer, contentType, agentName) {
     if (!ALLOWED_TYPES[contentType]) {
@@ -58,32 +60,33 @@ class UploadService {
       }
     }
 
-    const apiKey = process.env.IMGBB_API_KEY;
-    if (!apiKey) throw new Error('imgBB API key not configured');
-
     const base64Image = buffer.toString('base64');
+    const ext = ALLOWED_TYPES[contentType];
     const timestamp = Date.now();
     const rand = crypto.randomBytes(4).toString('hex');
-    const name = `${agentName}-${timestamp}-${rand}`;
+    const filename = `${agentName}-${timestamp}-${rand}.${ext}`;
 
-    // Build form data
+    // Build multipart form data
     const boundary = `----formdata${crypto.randomBytes(8).toString('hex')}`;
     const parts = [
-      `--${boundary}\r\nContent-Disposition: form-data; name="image"\r\n\r\n${base64Image}\r\n`,
-      `--${boundary}\r\nContent-Disposition: form-data; name="name"\r\n\r\n${name}\r\n`,
-      `--${boundary}\r\nContent-Disposition: form-data; name="expiration"\r\n\r\n${EXPIRATION_SECONDS}\r\n`,
-      `--${boundary}--\r\n`
+      `--${boundary}\r\nContent-Disposition: form-data; name="key"\r\n\r\n${FREEIMAGE_API_KEY}\r\n`,
+      `--${boundary}\r\nContent-Disposition: form-data; name="action"\r\n\r\nupload\r\n`,
+      `--${boundary}\r\nContent-Disposition: form-data; name="format"\r\n\r\njson\r\n`,
+      `--${boundary}\r\nContent-Disposition: form-data; name="source"; filename="${filename}"\r\nContent-Type: ${contentType}\r\n\r\n`,
     ];
-    const body = parts.join('');
+
+    const preamble = Buffer.from(parts.join(''));
+    const epilogue = Buffer.from(`\r\n--${boundary}--\r\n`);
+    const body = Buffer.concat([preamble, buffer, epilogue]);
 
     const response = await new Promise((resolve, reject) => {
       const req = https.request({
-        hostname: 'api.imgbb.com',
-        path: `/1/upload?key=${apiKey}`,
+        hostname: 'freeimage.host',
+        path: '/api/1/upload',
         method: 'POST',
         headers: {
           'Content-Type': `multipart/form-data; boundary=${boundary}`,
-          'Content-Length': Buffer.byteLength(body)
+          'Content-Length': body.length
         }
       }, (res) => {
         let data = '';
@@ -91,12 +94,12 @@ class UploadService {
         res.on('end', () => {
           try {
             const json = JSON.parse(data);
-            if (res.statusCode >= 400 || !json.success) {
-              reject(new Error(`imgBB error: ${json.error?.message || json.status_txt || data}`));
+            if (res.statusCode >= 400 || json.status_code !== 200) {
+              reject(new Error(`FreeImage.host error: ${json.error?.message || json.status_txt || data}`));
             } else {
               resolve(json);
             }
-          } catch { reject(new Error(`imgBB parse error: ${data}`)); }
+          } catch { reject(new Error(`FreeImage.host parse error: ${data}`)); }
         });
       });
       req.on('error', reject);
@@ -104,7 +107,7 @@ class UploadService {
       req.end();
     });
 
-    return response.data.url;
+    return response.image.image.url;
   }
 }
 
