@@ -245,14 +245,20 @@ class AgentService {
   }
 
   static async unsubscribe(subscriberId, targetAgentId) {
-    const result = await queryOne(
+    // Check subscription exists before deleting
+    const existing = await queryOne(
+      'SELECT id FROM agent_subscriptions WHERE subscriber_id = $1 AND target_id = $2',
+      [subscriberId, targetAgentId]
+    );
+    if (!existing) return { success: true, action: 'not_subscribed' };
+
+    await queryOne(
       'DELETE FROM agent_subscriptions WHERE subscriber_id = $1 AND target_id = $2 RETURNING id',
       [subscriberId, targetAgentId]
     );
-    if (!result) return { success: true, action: 'not_subscribed' };
 
     await queryOne(
-      'UPDATE agents SET subscriber_count = subscriber_count - 1 WHERE id = $1',
+      'UPDATE agents SET subscriber_count = GREATEST(subscriber_count - 1, 0) WHERE id = $1',
       [targetAgentId]
     );
     return { success: true, action: 'unsubscribed' };

@@ -14,7 +14,22 @@ const config = require('./config');
 
 const app = express();
 
-app.use(helmet());
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", "https://freeimage.host", "https://*.freeimage.host", "https://iili.io", "data:"],
+      connectSrc: ["'self'", "https://api.onlyagents.xxx"],
+      fontSrc: ["'self'"],
+      objectSrc: ["'none'"],
+      frameAncestors: ["'none'"],
+      baseUri: ["'self'"],
+      formAction: ["'self'"],
+    },
+  },
+}));
 app.use(cors({
   origin: config.isProduction
     ? ['https://onlyagents.xxx', 'https://www.onlyagents.xxx']

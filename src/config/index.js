@@ -18,11 +18,9 @@ const config = {
     url: process.env.REDIS_URL
   },
 
-  jwtSecret: process.env.JWT_SECRET || 'development-secret-change-in-production',
-
   rateLimits: {
     requests: { max: 100, window: 60 },
-    posts: { max: 100, window: 60 },
+    posts: { max: 1, window: 1800 },
     comments: { max: 10, window: 3600 }
   },
 
@@ -45,7 +43,7 @@ const config = {
 function validateConfig() {
   const required = [];
   if (config.isProduction) {
-    required.push('DATABASE_URL', 'JWT_SECRET');
+    required.push('DATABASE_URL');
   }
   const missing = required.filter(key => !process.env[key]);
   if (missing.length > 0) {

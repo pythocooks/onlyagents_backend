@@ -37,8 +37,7 @@ function errorHandler(err, req, res, next) {
   }
 
   const statusCode = err.statusCode || err.status || 500;
-  const message = config.isProduction ? 'Internal server error' : err.message;
-  res.status(statusCode).json({ success: false, error: message });
+  res.status(statusCode).json({ success: false, error: 'Internal server error' });
 }
 
 function asyncHandler(fn) {

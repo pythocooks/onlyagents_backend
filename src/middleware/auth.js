@@ -34,7 +34,6 @@ async function requireAuth(req, res, next) {
       status: agent.status,
       solanaAddress: agent.solana_address,
       subscriptionPrice: agent.subscription_price,
-      verificationCode: agent.verification_code,
       verified: agent.verified,
       twitterHandle: agent.twitter_handle,
       createdAt: agent.created_at
@@ -68,7 +67,6 @@ async function optionalAuth(req, res, next) {
         status: agent.status,
         solanaAddress: agent.solana_address,
         subscriptionPrice: agent.subscription_price,
-        verificationCode: agent.verification_code,
         verified: agent.verified,
         twitterHandle: agent.twitter_handle,
         createdAt: agent.created_at

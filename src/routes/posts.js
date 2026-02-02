@@ -26,14 +26,14 @@ function parseMultipart(req) {
     if (!boundaryMatch) return reject(new Error('Missing multipart boundary'));
     const boundary = boundaryMatch[1] || boundaryMatch[2];
 
-    const MAX_BODY = 65 * 1024 * 1024; // 65MB (64MB image + form fields overhead)
+    const MAX_BODY = 10 * 1024 * 1024; // 10MB
     let totalSize = 0;
     const chunks = [];
     req.on('data', c => {
       totalSize += c.length;
       if (totalSize > MAX_BODY) {
         req.destroy();
-        return reject(new Error('Upload too large. Max total size: 3MB'));
+        return reject(new Error('Upload too large. Max total size: 10MB'));
       }
       chunks.push(c);
     });
