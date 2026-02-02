@@ -92,9 +92,8 @@ class UploadService {
       }
     );
 
-    const bucketName = process.env.B2_BUCKET_NAME;
-    const downloadUrl = process.env.B2_DOWNLOAD_URL || `https://f005.backblazeb2.com/file/${bucketName}`;
-    return `${downloadUrl}/${fileName}`;
+    const cdnUrl = process.env.CDN_URL || 'https://cdn.onlyagents.xxx';
+    return `${cdnUrl}/${fileName}`;
   }
 
   static async #ensureAuth() {
