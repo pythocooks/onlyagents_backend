@@ -1,9 +1,8 @@
 /**
- * Upload Service — Backblaze B2 image uploads
+ * Upload Service — imgBB image uploads
  */
 
 const https = require('https');
-const http = require('http');
 const crypto = require('crypto');
 const { BadRequestError } = require('../utils/errors');
 
@@ -19,21 +18,18 @@ const MAGIC_BYTES = {
   'image/png': [Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A])],
   'image/jpeg': [Buffer.from([0xFF, 0xD8, 0xFF])],
   'image/gif': [Buffer.from('GIF87a'), Buffer.from('GIF89a')],
-  'image/webp': [Buffer.from('RIFF')], // RIFF....WEBP (bytes 0-3)
+  'image/webp': [Buffer.from('RIFF')],
 };
 
 const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2MB
+const EXPIRATION_SECONDS = 259200; // 3 days
 
 class UploadService {
-  static #authToken = null;
-  static #apiUrl = null;
-  static #authExpiry = 0;
-
   /**
-   * Upload an image buffer to B2
+   * Upload an image buffer to imgBB
    * @param {Buffer} buffer - Image data
    * @param {string} contentType - MIME type
-   * @param {string} agentName - Uploading agent's name (for filename prefix)
+   * @param {string} agentName - Uploading agent's name
    * @returns {Promise<string>} Public URL
    */
   static async upload(buffer, contentType, agentName) {
@@ -47,7 +43,7 @@ class UploadService {
       throw new BadRequestError('Empty file');
     }
 
-    // Validate magic bytes to ensure file is actually an image
+    // Validate magic bytes
     const magicOptions = MAGIC_BYTES[contentType];
     if (magicOptions) {
       const matches = magicOptions.some(magic => {
@@ -57,74 +53,37 @@ class UploadService {
       if (!matches) {
         throw new BadRequestError(`File content does not match ${contentType}. Upload a real image file.`);
       }
-      // Extra check for WebP: bytes 8-11 must be "WEBP"
       if (contentType === 'image/webp' && buffer.subarray(8, 12).toString() !== 'WEBP') {
         throw new BadRequestError('File content does not match image/webp. Upload a real WebP file.');
       }
     }
 
-    await this.#ensureAuth();
+    const apiKey = process.env.IMGBB_API_KEY;
+    if (!apiKey) throw new Error('imgBB API key not configured');
 
-    const ext = ALLOWED_TYPES[contentType];
+    const base64Image = buffer.toString('base64');
     const timestamp = Date.now();
     const rand = crypto.randomBytes(4).toString('hex');
-    const fileName = `${agentName}/${timestamp}-${rand}.${ext}`;
+    const name = `${agentName}-${timestamp}-${rand}`;
 
-    // Get upload URL
-    const uploadUrlData = await this.#b2Request(
-      `${this.#apiUrl}/b2api/v2/b2_get_upload_url`,
-      { bucketId: process.env.B2_BUCKET_ID },
-      this.#authToken
-    );
+    // Build form data
+    const boundary = `----formdata${crypto.randomBytes(8).toString('hex')}`;
+    const parts = [
+      `--${boundary}\r\nContent-Disposition: form-data; name="image"\r\n\r\n${base64Image}\r\n`,
+      `--${boundary}\r\nContent-Disposition: form-data; name="name"\r\n\r\n${name}\r\n`,
+      `--${boundary}\r\nContent-Disposition: form-data; name="expiration"\r\n\r\n${EXPIRATION_SECONDS}\r\n`,
+      `--${boundary}--\r\n`
+    ];
+    const body = parts.join('');
 
-    // Upload file
-    const sha1 = crypto.createHash('sha1').update(buffer).digest('hex');
-
-    const uploadResponse = await this.#rawUpload(
-      uploadUrlData.uploadUrl,
-      buffer,
-      {
-        'Authorization': uploadUrlData.authorizationToken,
-        'X-Bz-File-Name': encodeURIComponent(fileName),
-        'Content-Type': contentType,
-        'Content-Length': buffer.length,
-        'X-Bz-Content-Sha1': sha1
-      }
-    );
-
-    const cdnUrl = process.env.CDN_URL || 'https://cdn.onlyagents.xxx';
-    return `${cdnUrl}/${fileName}`;
-  }
-
-  static async #ensureAuth() {
-    if (this.#authToken && Date.now() < this.#authExpiry) return;
-
-    const keyId = process.env.B2_KEY_ID;
-    const key = process.env.B2_KEY;
-    if (!keyId || !key) throw new Error('B2 credentials not configured');
-
-    const auth = Buffer.from(`${keyId}:${key}`).toString('base64');
-    const data = await this.#httpRequest('https://api.backblazeb2.com/b2api/v2/b2_authorize_account', {
-      headers: { 'Authorization': `Basic ${auth}` }
-    });
-
-    this.#authToken = data.authorizationToken;
-    this.#apiUrl = data.apiUrl;
-    this.#authExpiry = Date.now() + 23 * 60 * 60 * 1000; // refresh after 23h
-  }
-
-  static #b2Request(url, body, token) {
-    return new Promise((resolve, reject) => {
-      const parsed = new URL(url);
-      const payload = JSON.stringify(body);
+    const response = await new Promise((resolve, reject) => {
       const req = https.request({
-        hostname: parsed.hostname,
-        path: parsed.pathname,
+        hostname: 'api.imgbb.com',
+        path: `/1/upload?key=${apiKey}`,
         method: 'POST',
         headers: {
-          'Authorization': token,
-          'Content-Type': 'application/json',
-          'Content-Length': Buffer.byteLength(payload)
+          'Content-Type': `multipart/form-data; boundary=${boundary}`,
+          'Content-Length': Buffer.byteLength(body)
         }
       }, (res) => {
         let data = '';
@@ -132,65 +91,20 @@ class UploadService {
         res.on('end', () => {
           try {
             const json = JSON.parse(data);
-            if (res.statusCode >= 400) reject(new Error(`B2 error ${res.statusCode}: ${json.message || data}`));
-            else resolve(json);
-          } catch { reject(new Error(`B2 parse error: ${data}`)); }
+            if (res.statusCode >= 400 || !json.success) {
+              reject(new Error(`imgBB error: ${json.error?.message || json.status_txt || data}`));
+            } else {
+              resolve(json);
+            }
+          } catch { reject(new Error(`imgBB parse error: ${data}`)); }
         });
       });
       req.on('error', reject);
-      req.write(payload);
+      req.write(body);
       req.end();
     });
-  }
 
-  static #rawUpload(url, buffer, headers) {
-    return new Promise((resolve, reject) => {
-      const parsed = new URL(url);
-      const req = https.request({
-        hostname: parsed.hostname,
-        path: parsed.pathname + parsed.search,
-        method: 'POST',
-        headers
-      }, (res) => {
-        let data = '';
-        res.on('data', c => data += c);
-        res.on('end', () => {
-          try {
-            const json = JSON.parse(data);
-            if (res.statusCode >= 400) reject(new Error(`B2 upload error ${res.statusCode}: ${json.message || data}`));
-            else resolve(json);
-          } catch { reject(new Error(`B2 upload parse error: ${data}`)); }
-        });
-      });
-      req.on('error', reject);
-      req.write(buffer);
-      req.end();
-    });
-  }
-
-  static #httpRequest(url, options = {}) {
-    return new Promise((resolve, reject) => {
-      const parsed = new URL(url);
-      const mod = parsed.protocol === 'https:' ? https : http;
-      const req = mod.request({
-        hostname: parsed.hostname,
-        path: parsed.pathname,
-        method: 'GET',
-        ...options
-      }, (res) => {
-        let data = '';
-        res.on('data', c => data += c);
-        res.on('end', () => {
-          try {
-            const json = JSON.parse(data);
-            if (res.statusCode >= 400) reject(new Error(`HTTP ${res.statusCode}: ${json.message || data}`));
-            else resolve(json);
-          } catch { reject(new Error(`Parse error: ${data}`)); }
-        });
-      });
-      req.on('error', reject);
-      req.end();
-    });
+    return response.data.url;
   }
 }
 
