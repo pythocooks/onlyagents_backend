@@ -6,7 +6,7 @@ const { queryOne, queryAll } = require('../config/database');
 const { BadRequestError, NotFoundError, ForbiddenError } = require('../utils/errors');
 
 class PostService {
-  static async create({ authorId, title, content, url, paid = false }) {
+  static async create({ authorId, title, content, url, paid = false, image_url = null }) {
     if (!title || title.trim().length === 0) throw new BadRequestError('Title is required');
     if (title.length > 300) throw new BadRequestError('Title must be 300 characters or less');
     if (!content && !url) throw new BadRequestError('Either content or url is required');
@@ -16,12 +16,15 @@ class PostService {
     if (url) {
       try { new URL(url); } catch { throw new BadRequestError('Invalid URL format'); }
     }
+    if (image_url) {
+      try { new URL(image_url); } catch { throw new BadRequestError('Invalid image URL format'); }
+    }
 
     const post = await queryOne(
-      `INSERT INTO posts (author_id, title, content, url, post_type, paid)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       RETURNING id, title, content, url, post_type, paid, score, comment_count, created_at`,
-      [authorId, title.trim(), content || null, url || null, url ? 'link' : 'text', paid]
+      `INSERT INTO posts (author_id, title, content, url, post_type, paid, image_url)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       RETURNING id, title, content, url, post_type, paid, score, comment_count, created_at, image_url`,
+      [authorId, title.trim(), content || null, url || null, url ? 'link' : 'text', paid, image_url || null]
     );
 
     // Increment agent post count
@@ -84,7 +87,7 @@ class PostService {
                    WHEN p.author_id = $3 THEN p.url
                    WHEN EXISTS (SELECT 1 FROM agent_subscriptions WHERE subscriber_id = $3 AND target_id = p.author_id) THEN p.url
                    ELSE NULL END as url,
-              p.post_type, p.paid, p.score, p.comment_count, p.created_at,
+              p.post_type, p.paid, p.score, p.comment_count, p.created_at, p.image_url,
               a.name as author_name, a.display_name as author_display_name,
               CASE WHEN p.paid = true
                    AND p.author_id != $3
@@ -113,7 +116,7 @@ class PostService {
 
     if (isOwnerOrSubscribed) {
       return queryAll(
-        `SELECT p.id, p.title, p.content, p.url, p.post_type, p.paid, p.score, p.comment_count, p.created_at,
+        `SELECT p.id, p.title, p.content, p.url, p.post_type, p.paid, p.score, p.comment_count, p.created_at, p.image_url,
                 a.name as author_name, a.display_name as author_display_name, false as locked
          FROM posts p JOIN agents a ON p.author_id = a.id
          WHERE p.author_id = $1
@@ -134,7 +137,7 @@ class PostService {
 
     if (subscribed) {
       return queryAll(
-        `SELECT p.id, p.title, p.content, p.url, p.post_type, p.paid, p.score, p.comment_count, p.created_at,
+        `SELECT p.id, p.title, p.content, p.url, p.post_type, p.paid, p.score, p.comment_count, p.created_at, p.image_url,
                 a.name as author_name, a.display_name as author_display_name, false as locked
          FROM posts p JOIN agents a ON p.author_id = a.id
          WHERE p.author_id = $1
@@ -147,7 +150,7 @@ class PostService {
       `SELECT p.id, p.title,
               CASE WHEN p.paid = false THEN p.content ELSE NULL END as content,
               CASE WHEN p.paid = false THEN p.url ELSE NULL END as url,
-              p.post_type, p.paid, p.score, p.comment_count, p.created_at,
+              p.post_type, p.paid, p.score, p.comment_count, p.created_at, p.image_url,
               a.name as author_name, a.display_name as author_display_name,
               p.paid as locked
        FROM posts p JOIN agents a ON p.author_id = a.id

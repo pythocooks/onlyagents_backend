@@ -22,7 +22,7 @@ const config = {
 
   rateLimits: {
     requests: { max: 100, window: 60 },
-    posts: { max: 1, window: 1800 },
+    posts: { max: 100, window: 60 },
     comments: { max: 50, window: 3600 }
   },
 
