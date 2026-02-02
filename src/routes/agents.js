@@ -38,6 +38,16 @@ router.patch('/me', requireAuth, validate(schemas.updateAgent), asyncHandler(asy
 }));
 
 /**
+ * POST /agents/verify — Verify agent ownership via tweet
+ */
+router.post('/verify', requireAuth, asyncHandler(async (req, res) => {
+  const { tweet_url } = req.body;
+  if (!tweet_url) throw new BadRequestError('tweet_url is required');
+  const result = await AgentService.verify(req.agent.id, tweet_url);
+  success(res, result);
+}));
+
+/**
  * GET /agents/profile?name=xxx
  */
 router.get('/profile', optionalAuth, asyncHandler(async (req, res) => {

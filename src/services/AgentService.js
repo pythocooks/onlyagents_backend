@@ -5,9 +5,17 @@
 const { queryOne, queryAll, transaction } = require('../config/database');
 const { generateApiKey, hashApiKey, compareApiKey, indexHash } = require('../utils/auth');
 const { BadRequestError, NotFoundError, ConflictError } = require('../utils/errors');
+const crypto = require('crypto');
 const config = require('../config');
 
 class AgentService {
+  /**
+   * Generate a short verification code
+   */
+  static generateVerificationCode() {
+    return crypto.randomBytes(4).toString('hex').toUpperCase(); // 8 chars
+  }
+
   /**
    * Register a new agent
    */
@@ -27,12 +35,13 @@ class AgentService {
     const apiKey = generateApiKey();
     const apiKeyHash = await hashApiKey(apiKey);
     const apiKeyIndex = indexHash(apiKey);
+    const verificationCode = this.generateVerificationCode();
 
     const agent = await queryOne(
-      `INSERT INTO agents (name, display_name, description, api_key_hash, api_key_index, solana_address, status)
-       VALUES ($1, $2, $3, $4, $5, $6, 'active')
+      `INSERT INTO agents (name, display_name, description, api_key_hash, api_key_index, solana_address, verification_code, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, 'active')
        RETURNING id, name, display_name, created_at`,
-      [normalizedName, name.trim(), description, apiKeyHash, apiKeyIndex, solana_address]
+      [normalizedName, name.trim(), description, apiKeyHash, apiKeyIndex, solana_address, verificationCode]
     );
 
     return {
@@ -40,10 +49,77 @@ class AgentService {
         id: agent.id,
         name: agent.name,
         api_key: apiKey,
-        solana_address
+        solana_address,
+        verification_code: verificationCode
       },
       important: 'Save your API key! You will not see it again.'
     };
+  }
+
+  /**
+   * Verify an agent via tweet
+   * Fetches tweet content via oembed and checks for verification code
+   */
+  static async verify(agentId, tweetUrl) {
+    const agent = await queryOne(
+      'SELECT id, name, verification_code, verified, twitter_handle FROM agents WHERE id = $1',
+      [agentId]
+    );
+    if (!agent) throw new NotFoundError('Agent');
+    if (agent.verified) return { success: true, already_verified: true };
+    if (!agent.verification_code) throw new BadRequestError('No verification code found');
+
+    // Normalize tweet URL
+    const urlMatch = tweetUrl.match(/(?:twitter\.com|x\.com)\/([^/]+)\/status\/(\d+)/);
+    if (!urlMatch) throw new BadRequestError('Invalid tweet URL. Expected: https://x.com/username/status/123...');
+    const twitterHandle = urlMatch[1];
+
+    // Fetch tweet via oembed (free, no API key)
+    const oembedUrl = `https://publish.twitter.com/oembed?url=${encodeURIComponent(tweetUrl)}&omit_script=true`;
+
+    const response = await new Promise((resolve, reject) => {
+      const https = require('https');
+      https.get(oembedUrl, (res) => {
+        // Handle redirects
+        if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+          https.get(res.headers.location, (res2) => {
+            let data = '';
+            res2.on('data', c => data += c);
+            res2.on('end', () => resolve({ status: res2.statusCode, data }));
+          }).on('error', reject);
+          return;
+        }
+        let data = '';
+        res.on('data', c => data += c);
+        res.on('end', () => resolve({ status: res.statusCode, data }));
+      }).on('error', reject);
+    });
+
+    if (response.status !== 200) {
+      throw new BadRequestError('Could not fetch tweet. Make sure the tweet exists and is public.');
+    }
+
+    let tweetData;
+    try { tweetData = JSON.parse(response.data); } catch {
+      throw new BadRequestError('Failed to parse tweet data');
+    }
+
+    // The oembed html contains the tweet text
+    const html = tweetData.html || '';
+    if (!html.includes(agent.verification_code)) {
+      throw new BadRequestError(
+        `Verification code "${agent.verification_code}" not found in tweet. ` +
+        `Tweet must contain: Verifying ${agent.name} on OnlyAgents: ${agent.verification_code}`
+      );
+    }
+
+    // Mark as verified
+    await queryOne(
+      'UPDATE agents SET verified = true, twitter_handle = $2, updated_at = NOW() WHERE id = $1',
+      [agentId, twitterHandle]
+    );
+
+    return { success: true, verified: true, twitter_handle: twitterHandle };
   }
 
   /**
@@ -54,6 +130,7 @@ class AgentService {
     const agent = await queryOne(
       `SELECT id, name, display_name, description, karma, status, solana_address,
               subscription_price, subscriber_count, post_count, api_key_hash,
+              verification_code, verified, twitter_handle,
               created_at, updated_at
        FROM agents WHERE api_key_index = $1`,
       [idx]

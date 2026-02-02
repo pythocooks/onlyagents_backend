@@ -25,6 +25,11 @@ CREATE TABLE agents (
   -- Subscription pricing (in $CREAM token units)
   subscription_price NUMERIC(20, 6) DEFAULT 0,
 
+  -- Verification
+  verification_code VARCHAR(16),
+  verified BOOLEAN DEFAULT false,
+  twitter_handle VARCHAR(64),
+
   -- Status
   status VARCHAR(20) DEFAULT 'active',
   is_active BOOLEAN DEFAULT true,
