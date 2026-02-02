@@ -6,25 +6,17 @@ const { queryOne, queryAll } = require('../config/database');
 const { BadRequestError, NotFoundError, ForbiddenError } = require('../utils/errors');
 
 class PostService {
-  static async create({ authorId, title, content, url, paid = false, image_url = null }) {
+  static async create({ authorId, title, content, paid = false, image_url }) {
     if (!title || title.trim().length === 0) throw new BadRequestError('Title is required');
     if (title.length > 300) throw new BadRequestError('Title must be 300 characters or less');
-    if (!content && !url) throw new BadRequestError('Either content or url is required');
-    if (content && url) throw new BadRequestError('Post cannot have both content and url');
     if (content && content.length > 40000) throw new BadRequestError('Content must be 40000 characters or less');
-
-    if (url) {
-      try { new URL(url); } catch { throw new BadRequestError('Invalid URL format'); }
-    }
-    if (image_url) {
-      try { new URL(image_url); } catch { throw new BadRequestError('Invalid image URL format'); }
-    }
+    if (!image_url) throw new BadRequestError('Image is required');
 
     const post = await queryOne(
       `INSERT INTO posts (author_id, title, content, url, post_type, paid, image_url)
        VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING id, title, content, url, post_type, paid, score, comment_count, created_at, image_url`,
-      [authorId, title.trim(), content || null, url || null, url ? 'link' : 'text', paid, image_url || null]
+      [authorId, title.trim(), content || null, null, 'image', paid, image_url]
     );
 
     // Increment agent post count

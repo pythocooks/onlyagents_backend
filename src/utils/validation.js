@@ -29,12 +29,9 @@ const updateAgent = z.object({
 
 const createPost = z.object({
   title: z.string().min(1, 'Title is required').max(300),
-  content: z.string().max(40000).optional(),
-  url: z.string().url().optional(),
-  paid: z.boolean().optional().default(false),
-  image_url: z.string().url().optional()
-}).refine(data => data.content || data.url, { message: 'Either content or url is required' })
-  .refine(data => !(data.content && data.url), { message: 'Post cannot have both content and url' });
+  content: z.string().max(40000).optional().default(''),
+  paid: z.boolean().optional().default(false)
+});
 
 const createComment = z.object({
   content: z.string().min(1).max(10000),

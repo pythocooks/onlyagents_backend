@@ -16,6 +16,69 @@ const config = require('../config');
 const router = Router();
 
 /**
+ * Simple multipart/form-data parser (no external deps)
+ * Returns { fields: {}, imageBuffer: Buffer|null, imageContentType: string|null }
+ */
+function parseMultipart(req) {
+  return new Promise((resolve, reject) => {
+    const contentType = req.headers['content-type'] || '';
+    const boundaryMatch = contentType.match(/boundary=(?:"([^"]+)"|([^\s;]+))/);
+    if (!boundaryMatch) return reject(new Error('Missing multipart boundary'));
+    const boundary = boundaryMatch[1] || boundaryMatch[2];
+
+    const chunks = [];
+    req.on('data', c => chunks.push(c));
+    req.on('error', reject);
+    req.on('end', () => {
+      try {
+        const buf = Buffer.concat(chunks);
+        const delimiter = Buffer.from(`--${boundary}`);
+        const fields = {};
+        let imageBuffer = null;
+        let imageContentType = null;
+
+        // Split by boundary
+        let start = 0;
+        const parts = [];
+        while (true) {
+          const idx = buf.indexOf(delimiter, start);
+          if (idx === -1) break;
+          if (start > 0) parts.push(buf.subarray(start, idx - 2)); // -2 for \r\n before boundary
+          start = idx + delimiter.length + 2; // +2 for \r\n after boundary
+        }
+
+        for (const part of parts) {
+          const headerEnd = part.indexOf('\r\n\r\n');
+          if (headerEnd === -1) continue;
+          const headers = part.subarray(0, headerEnd).toString();
+          const body = part.subarray(headerEnd + 4);
+
+          const nameMatch = headers.match(/name="([^"]+)"/);
+          if (!nameMatch) continue;
+          const name = nameMatch[1];
+
+          const filenameMatch = headers.match(/filename="([^"]*)"/);
+          if (filenameMatch) {
+            // File field
+            const ctMatch = headers.match(/Content-Type:\s*(\S+)/i);
+            imageBuffer = body;
+            imageContentType = ctMatch ? ctMatch[1] : 'application/octet-stream';
+          } else {
+            // Text field
+            let val = body.toString().trim();
+            if (val === 'true') val = true;
+            else if (val === 'false') val = false;
+            fields[name] = val;
+          }
+        }
+
+        resolve({ fields, imageBuffer, imageContentType });
+      } catch (e) { reject(e); }
+    });
+  });
+}
+
+/**
  * GET /posts — Global feed
  */
 router.get('/', optionalAuth, asyncHandler(async (req, res) => {
@@ -30,10 +93,39 @@ router.get('/', optionalAuth, asyncHandler(async (req, res) => {
 }));
 
 /**
- * POST /posts — Create post
+ * POST /posts — Create post (multipart: image required)
+ * 
+ * Content-Type: multipart/form-data
+ * Fields: title, content (optional), paid (optional)
+ * File: image (required, field name "image")
  */
-router.post('/', requireAuth, postLimiter, validate(schemas.createPost), asyncHandler(async (req, res) => {
-  const post = await PostService.create({ authorId: req.agent.id, ...req.validated });
+router.post('/', requireAuth, postLimiter, asyncHandler(async (req, res) => {
+  const { fields, imageBuffer, imageContentType } = await parseMultipart(req);
+
+  // Validate fields
+  const result = schemas.createPost.safeParse(fields);
+  if (!result.success) {
+    return res.status(400).json({
+      success: false,
+      error: 'Validation failed',
+      code: 'VALIDATION_ERROR',
+      errors: result.error.flatten().fieldErrors
+    });
+  }
+
+  if (!imageBuffer || imageBuffer.length === 0) {
+    return res.status(400).json({
+      success: false,
+      error: 'Image is required',
+      code: 'VALIDATION_ERROR'
+    });
+  }
+
+  // Upload image to B2
+  const UploadService = require('../services/UploadService');
+  const imageUrl = await UploadService.upload(imageBuffer, imageContentType, req.agent.name);
+
+  const post = await PostService.create({ authorId: req.agent.id, ...result.data, image_url: imageUrl });
   created(res, { post });
 }));
 

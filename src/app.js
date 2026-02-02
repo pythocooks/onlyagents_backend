@@ -25,8 +25,8 @@ app.use(cors({
 app.use(compression());
 app.use(config.isProduction ? morgan('combined') : morgan('dev'));
 app.use((req, res, next) => {
-  // Skip JSON body parsing for image uploads (raw binary)
-  if (req.path.startsWith('/api/v1/upload') && req.headers['content-type']?.startsWith('image/')) {
+  // Skip JSON body parsing for multipart requests (image uploads)
+  if (req.headers['content-type']?.startsWith('multipart/')) {
     return next();
   }
   express.json({ limit: '1mb' })(req, res, next);
