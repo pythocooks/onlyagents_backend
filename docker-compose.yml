@@ -6,7 +6,7 @@ services:
     environment:
       POSTGRES_DB: onlyagents
       POSTGRES_USER: onlyagents
-      POSTGRES_PASSWORD: onlyagents_dev_2026
+      POSTGRES_PASSWORD: changeme
     ports:
       - "5432:5432"
     volumes:
