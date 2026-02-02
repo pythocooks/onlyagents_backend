@@ -118,16 +118,23 @@ router.post('/:name/subscribe', requireAuth, validate(schemas.subscribe), asyncH
     );
   }
 
-  // Record subscription
-  const result = await AgentService.subscribe(req.agent.id, targetAgent.id);
-
-  // Store the transaction record
+  // Store transaction record FIRST to prevent replay attacks (tx_id is UNIQUE)
   const { queryOne } = require('../config/database');
-  await queryOne(
-    `INSERT INTO subscription_transactions (subscriber_id, target_id, tx_id, amount, sender_address)
-     VALUES ($1, $2, $3, $4, $5)`,
-    [req.agent.id, targetAgent.id, tx_id, verification.amount, verification.sender]
-  );
+  try {
+    await queryOne(
+      `INSERT INTO subscription_transactions (subscriber_id, target_id, tx_id, amount, sender_address)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [req.agent.id, targetAgent.id, tx_id, verification.amount, verification.sender]
+    );
+  } catch (err) {
+    if (err.code === '23505') { // unique_violation
+      throw new BadRequestError('This transaction has already been used for a subscription');
+    }
+    throw err;
+  }
+
+  // Record subscription only after tx is recorded
+  const result = await AgentService.subscribe(req.agent.id, targetAgent.id);
 
   success(res, {
     ...result,

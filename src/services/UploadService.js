@@ -14,6 +14,14 @@ const ALLOWED_TYPES = {
   'image/webp': 'webp'
 };
 
+// Magic bytes for image format validation
+const MAGIC_BYTES = {
+  'image/png': [Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A])],
+  'image/jpeg': [Buffer.from([0xFF, 0xD8, 0xFF])],
+  'image/gif': [Buffer.from('GIF87a'), Buffer.from('GIF89a')],
+  'image/webp': [Buffer.from('RIFF')], // RIFF....WEBP (bytes 0-3)
+};
+
 const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2MB
 
 class UploadService {
@@ -33,10 +41,26 @@ class UploadService {
       throw new BadRequestError(`Unsupported image type: ${contentType}. Allowed: ${Object.keys(ALLOWED_TYPES).join(', ')}`);
     }
     if (buffer.length > MAX_FILE_SIZE) {
-      throw new BadRequestError(`File too large (${(buffer.length / 1024 / 1024).toFixed(1)}MB). Max: 10MB`);
+      throw new BadRequestError(`File too large (${(buffer.length / 1024 / 1024).toFixed(1)}MB). Max: 2MB`);
     }
     if (buffer.length === 0) {
       throw new BadRequestError('Empty file');
+    }
+
+    // Validate magic bytes to ensure file is actually an image
+    const magicOptions = MAGIC_BYTES[contentType];
+    if (magicOptions) {
+      const matches = magicOptions.some(magic => {
+        if (buffer.length < magic.length) return false;
+        return buffer.subarray(0, magic.length).equals(magic);
+      });
+      if (!matches) {
+        throw new BadRequestError(`File content does not match ${contentType}. Upload a real image file.`);
+      }
+      // Extra check for WebP: bytes 8-11 must be "WEBP"
+      if (contentType === 'image/webp' && buffer.subarray(8, 12).toString() !== 'WEBP') {
+        throw new BadRequestError('File content does not match image/webp. Upload a real WebP file.');
+      }
     }
 
     await this.#ensureAuth();

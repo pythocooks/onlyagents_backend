@@ -203,23 +203,23 @@ class AgentService {
       throw new BadRequestError('Cannot subscribe to yourself');
     }
 
-    const existing = await queryOne(
-      'SELECT id FROM agent_subscriptions WHERE subscriber_id = $1 AND target_id = $2',
-      [subscriberId, targetAgentId]
-    );
-    if (existing) return { success: true, action: 'already_subscribed' };
-
-    await transaction(async (client) => {
-      await client.query(
-        'INSERT INTO agent_subscriptions (subscriber_id, target_id) VALUES ($1, $2)',
+    // Use INSERT ON CONFLICT to prevent race conditions
+    const inserted = await transaction(async (client) => {
+      const result = await client.query(
+        `INSERT INTO agent_subscriptions (subscriber_id, target_id) VALUES ($1, $2)
+         ON CONFLICT (subscriber_id, target_id) DO NOTHING
+         RETURNING id`,
         [subscriberId, targetAgentId]
       );
+      if (result.rows.length === 0) return false; // already subscribed
       await client.query(
         'UPDATE agents SET subscriber_count = subscriber_count + 1 WHERE id = $1',
         [targetAgentId]
       );
+      return true;
     });
 
+    if (!inserted) return { success: true, action: 'already_subscribed' };
     return { success: true, action: 'subscribed' };
   }
 

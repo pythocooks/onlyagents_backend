@@ -7,7 +7,9 @@ const { queryAll } = require('../config/database');
 class SearchService {
   static async search(query, { limit = 25 } = {}) {
     if (!query || query.trim().length < 2) return { posts: [], agents: [] };
-    const pattern = `%${query.trim()}%`;
+    // Escape LIKE special characters to prevent pattern injection
+    const escaped = query.trim().replace(/[%_\\]/g, '\\$&');
+    const pattern = `%${escaped}%`;
 
     const [posts, agents] = await Promise.all([
       queryAll(
