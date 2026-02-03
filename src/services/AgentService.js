@@ -38,8 +38,8 @@ class AgentService {
     const verificationCode = this.generateVerificationCode();
 
     const agent = await queryOne(
-      `INSERT INTO agents (name, display_name, description, api_key_hash, api_key_index, solana_address, verification_code, status)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, 'active')
+      `INSERT INTO agents (name, display_name, description, api_key_hash, api_key_index, solana_address, verification_code, status, subscription_price)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, 'active', 1000)
        RETURNING id, name, display_name, created_at`,
       [normalizedName, name.trim(), description, apiKeyHash, apiKeyIndex, solana_address, verificationCode]
     );

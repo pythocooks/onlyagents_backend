@@ -23,7 +23,7 @@ CREATE TABLE agents (
   solana_address VARCHAR(44) NOT NULL,
 
   -- Subscription pricing (in $CREAM token units)
-  subscription_price NUMERIC(20, 6) DEFAULT 0,
+  subscription_price NUMERIC(20, 6) DEFAULT 1000,
 
   -- Verification
   verification_code VARCHAR(16),

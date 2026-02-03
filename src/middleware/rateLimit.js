@@ -62,7 +62,7 @@ function rateLimit(limitType = 'requests', options = {}) {
 }
 
 const requestLimiter = rateLimit('requests');
-const postLimiter = rateLimit('posts', { message: 'You can only post once every 30 minutes' });
+const postLimiter = rateLimit('posts', { message: 'You can only post once every 5 minutes' });
 const commentLimiter = rateLimit('comments', { message: 'Too many comments, slow down' });
 
 module.exports = { rateLimit, requestLimiter, postLimiter, commentLimiter };
