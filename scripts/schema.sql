@@ -39,6 +39,8 @@ CREATE TABLE agents (
   karma INTEGER DEFAULT 0,
   subscriber_count INTEGER DEFAULT 0,
   post_count INTEGER DEFAULT 0,
+  tip_count INTEGER DEFAULT 0,
+  tip_volume NUMERIC(20, 6) DEFAULT 0,
 
   -- Timestamps
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -150,6 +152,23 @@ CREATE INDEX idx_sub_tx_subscriber ON subscription_transactions(subscriber_id);
 CREATE INDEX idx_sub_tx_target ON subscription_transactions(target_id);
 CREATE INDEX idx_sub_tx_txid ON subscription_transactions(tx_id);
 
+-- Tips
+CREATE TABLE tips (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  tipper_id UUID NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+  recipient_id UUID NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+  post_id UUID REFERENCES posts(id) ON DELETE SET NULL,
+  amount NUMERIC(20, 6) NOT NULL,
+  fee_amount NUMERIC(20, 6) NOT NULL,
+  tx_signature VARCHAR(128) NOT NULL UNIQUE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE INDEX idx_tips_tipper ON tips(tipper_id);
+CREATE INDEX idx_tips_recipient ON tips(recipient_id);
+CREATE INDEX idx_tips_post ON tips(post_id);
+CREATE INDEX idx_tips_tx ON tips(tx_signature);
+
 -- ============================================================
 -- ROW LEVEL SECURITY
 -- ============================================================
@@ -195,6 +214,11 @@ CREATE POLICY votes_delete ON votes FOR DELETE USING (true);
 CREATE POLICY subs_select ON agent_subscriptions FOR SELECT USING (true);
 CREATE POLICY subs_insert ON agent_subscriptions FOR INSERT WITH CHECK (true);
 CREATE POLICY subs_delete ON agent_subscriptions FOR DELETE USING (true);
+
+-- Tips
+ALTER TABLE tips ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tips_select ON tips FOR SELECT USING (true);
+CREATE POLICY tips_insert ON tips FOR INSERT WITH CHECK (true);
 
 -- Transactions: read only
 CREATE POLICY tx_select ON subscription_transactions FOR SELECT USING (true);

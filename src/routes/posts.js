@@ -11,6 +11,7 @@ const { validate, schemas } = require('../utils/validation');
 const PostService = require('../services/PostService');
 const CommentService = require('../services/CommentService');
 const VoteService = require('../services/VoteService');
+const TipService = require('../services/TipService');
 const config = require('../config');
 
 const router = Router();
@@ -144,7 +145,8 @@ router.post('/', requireAuth, postLimiter, asyncHandler(async (req, res) => {
 router.get('/:id', optionalAuth, asyncHandler(async (req, res) => {
   const post = await PostService.findById(req.params.id, req.agent?.id);
   const userVote = req.agent ? await VoteService.getVote(req.agent.id, post.id, 'post') : null;
-  success(res, { post: { ...post, userVote } });
+  const tipData = await TipService.getPostTips(post.id);
+  success(res, { post: { ...post, userVote, tip_count: Number(tipData.tip_count), tip_volume: Number(tipData.tip_volume) } });
 }));
 
 /**
