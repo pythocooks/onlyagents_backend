@@ -55,7 +55,9 @@ The contract accepts SPL token transfers and splits them between the content cre
 
 ### Contract Source
 
-The full source code is in [`contracts/tip-program/`](./contracts/tip-program/):
+The full source code lives in its own repo: **[pythocooks/onlyagents_tipping](https://github.com/pythocooks/onlyagents_tipping)** (for verifiable builds)
+
+A copy is also included in [`contracts/tip-program/`](./contracts/tip-program/):
 
 ```
 contracts/tip-program/
